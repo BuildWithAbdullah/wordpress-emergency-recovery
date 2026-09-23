@@ -1,0 +1,57 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: Node ${{ matrix.node }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ['18', '20', '22']
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+
+      - name: Run the test suite
+        run: npm test
+
+      - name: Verify the repository
+        run: npm run verify
+
+      - name: Run wp-triage over a failing example and expect exit 1
+        run: |
+          set +e
+          node bin/wp-triage.mjs examples/_baseline --format text
+          base=$?
+          set -e
+          test "$base" -eq 0 || { echo "the clean baseline should exit 0, got $base"; exit 1; }
+
+          rm -rf /tmp/case && cp -r examples/_baseline /tmp/case
+          cp -r examples/uploads-php-shell/fail/. /tmp/case/
+          set +e
+          node bin/wp-triage.mjs /tmp/case --format markdown
+          bad=$?
+          set -e
+          test "$bad" -eq 1 || { echo "a failing install should exit 1, got $bad"; exit 1; }
+
+      - name: Reject an unreadable path with exit 2
+        run: |
+          set +e
+          node bin/wp-triage.mjs /no/such/path
+          code=$?
+          set -e
+          test "$code" -eq 2 || { echo "expected exit 2, got $code"; exit 1; }
+
+      - name: Confirm the tool has no dependencies to install
+        run: |
+          test ! -f package-lock.json || { echo "a lock file means a dependency crept in"; exit 1; }
+          node -e "const p=require('./package.json');if(Object.keys(p.dependencies||{}).length){console.error('dependencies found');process.exit(1)}"
