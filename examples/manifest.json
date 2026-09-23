@@ -1,0 +1,100 @@
+{
+  "baseline": "_baseline",
+  "pairs": [
+    {
+      "name": "debug-display-on",
+      "summary": "WP_DEBUG is on and errors are rendered into the page instead of a log.",
+      "expect": {
+        "fail": [
+          "CONFIG001"
+        ],
+        "pass": []
+      }
+    },
+    {
+      "name": "maintenance-file-left-behind",
+      "summary": "An update stopped part way and left the file that shows every visitor the maintenance notice.",
+      "expect": {
+        "fail": [
+          "UPD001"
+        ],
+        "pass": []
+      }
+    },
+    {
+      "name": "uploads-php-shell",
+      "summary": "A PHP file with a double extension sitting in the media directory.",
+      "expect": {
+        "fail": [
+          "UP003"
+        ],
+        "pass": []
+      }
+    },
+    {
+      "name": "uploads-htaccess-php-handler",
+      "summary": "The uploads directory is configured to execute PHP.",
+      "expect": {
+        "fail": [
+          "HTA002"
+        ],
+        "pass": []
+      }
+    },
+    {
+      "name": "output-before-open-tag",
+      "summary": "A blank line before the opening PHP tag in the theme, which breaks every redirect and cookie.",
+      "expect": {
+        "fail": [
+          "OUT001"
+        ],
+        "pass": []
+      }
+    },
+    {
+      "name": "obfuscated-mu-loader",
+      "summary": "A must-use plugin that loads before everything and hides what it does.",
+      "expect": {
+        "fail": [
+          "DROP003",
+          "OBF001"
+        ],
+        "pass": [
+          "DROP003"
+        ]
+      }
+    },
+    {
+      "name": "unknown-dropin",
+      "summary": "A file in wp-content named like a drop-in, which WordPress does not actually load.",
+      "expect": {
+        "fail": [
+          "DROP001"
+        ],
+        "pass": [
+          "DROP002"
+        ]
+      }
+    },
+    {
+      "name": "htaccess-redirect-loop",
+      "summary": "Two rules that each undo the other, which is a redirect loop in the browser.",
+      "expect": {
+        "fail": [
+          "HTA004"
+        ],
+        "pass": []
+      }
+    },
+    {
+      "name": "rogue-root-php",
+      "summary": "A PHP file at the web root that no WordPress release ships.",
+      "expect": {
+        "fail": [
+          "CORE001"
+        ],
+        "pass": []
+      }
+    }
+  ]
+}
