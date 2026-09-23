@@ -1,0 +1,17 @@
+{
+  "name": "wp-triage",
+  "version": "1.0.0",
+  "description": "Read-only filesystem triage for a broken or compromised WordPress install.",
+  "type": "module",
+  "bin": { "wp-triage": "bin/wp-triage.mjs" },
+  "engines": { "node": ">=18" },
+  "scripts": {
+    "test": "node --test test/checks-config.mjs test/checks-logs.mjs test/checks-updates.mjs test/checks-dropins.mjs test/checks-htaccess.mjs test/checks-output.mjs test/checks-uploads.mjs test/checks-obfuscation.mjs test/checks-core.mjs test/checks-permissions.mjs test/checks-shape.mjs test/catalogue.mjs test/examples.mjs test/report.mjs test/readonly.mjs test/cli.mjs",
+    "verify": "node tools/verify.mjs",
+    "check": "npm test && npm run verify"
+  },
+  "files": ["bin", "src", "docs"],
+  "keywords": ["wordpress", "incident-response", "triage", "recovery", "cli"],
+  "license": "MIT",
+  "dependencies": {}
+}
