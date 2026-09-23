@@ -1,0 +1,5 @@
+# CORRECTED: the media directory serves files and runs nothing.
+<FilesMatch "\.(?i:php|phtml|php[3457]|phar|pht|phps)$">
+  Require all denied
+</FilesMatch>
+php_flag engine off
