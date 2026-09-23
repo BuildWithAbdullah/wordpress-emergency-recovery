@@ -1,0 +1,4 @@
+# FAILING: this turns the media directory into a code execution path.
+# Any hole that lets a file be written here becomes remote code execution.
+AddType application/x-httpd-php .php
+php_flag engine on
