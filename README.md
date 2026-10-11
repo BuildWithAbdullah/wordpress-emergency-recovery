@@ -22,18 +22,16 @@ There is no score and no grade. A responder wants a list of places to look.
 
 ## Install
 
-No dependencies, and nothing to install if you have Node 18 or newer.
-
-```bash
-npx wp-triage /var/www/site
-```
-
-Or clone it:
+No dependencies. Clone it and run it with Node 18 or newer.
 
 ```bash
 git clone https://github.com/BuildWithAbdullah/wordpress-emergency-recovery
 node wordpress-emergency-recovery/bin/wp-triage.mjs /var/www/site
 ```
+
+This is not published to the npm registry, so there is no `npx wp-triage`. An
+earlier version of this README said there was. If you ran that command and got
+something, you got somebody else's package.
 
 ## Usage
 
