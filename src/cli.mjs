@@ -2,6 +2,7 @@ import { triage, exitCodeFor } from './triage.mjs';
 import { renderReport, FORMATS } from './report/index.mjs';
 import { CHECKS } from './checks/index.mjs';
 import { CATALOGUE, SEVERITIES } from './findings.mjs';
+import { LIMITS, renderLimits } from './limits.mjs';
 
 export const USAGE = `wp-triage <path-to-wordpress-root> [options]
 
@@ -16,6 +17,7 @@ Options
   --fail-on <severity>           Exit 1 at this severity or above. Default high.
   --list-checks                  Print the check modules and exit.
   --list-findings                Print the finding catalogue and exit.
+  --limits                       Print what this tool cannot see and exit.
   --help                         Print this message.
 
 Exit codes
@@ -25,12 +27,13 @@ Exit codes
 `;
 
 export function parseArgs(argv) {
-  const opts = { path: null, format: 'text', only: [], skip: [], failOn: 'high', listChecks: false, listFindings: false, help: false };
+  const opts = { path: null, format: 'text', only: [], skip: [], failOn: 'high', listChecks: false, listFindings: false, limits: false, help: false };
   for (let i = 0; i < argv.length; i += 1) {
     const a = argv[i];
     if (a === '--help' || a === '-h') opts.help = true;
     else if (a === '--list-checks') opts.listChecks = true;
     else if (a === '--list-findings') opts.listFindings = true;
+    else if (a === '--limits') opts.limits = true;
     else if (a === '--format') opts.format = argv[++i];
     else if (a === '--only') opts.only = String(argv[++i] || '').split(',').filter(Boolean);
     else if (a === '--skip') opts.skip = String(argv[++i] || '').split(',').filter(Boolean);
@@ -39,7 +42,7 @@ export function parseArgs(argv) {
     else if (opts.path === null) opts.path = a;
     else throw new Error(`unexpected argument: ${a}`);
   }
-  if (!opts.help && !opts.listChecks && !opts.listFindings) {
+  if (!opts.help && !opts.listChecks && !opts.listFindings && !opts.limits) {
     if (!opts.path) throw new Error('a path to the WordPress root is required');
     if (!FORMATS[opts.format]) throw new Error(`unknown format: ${opts.format}`);
     if (!SEVERITIES.includes(opts.failOn)) throw new Error(`unknown severity: ${opts.failOn}`);
@@ -53,6 +56,13 @@ export function parseArgs(argv) {
 
 export function listChecks() {
   return CHECKS.map((c) => `${c.id.padEnd(13)} ${c.describes}`).join('\n');
+}
+
+export function listLimits() {
+  return `wp-triage reads the filesystem and nothing else. ${LIMITS.length} limits follow,`
+    + ' and every one of them has a test that constructs the case it describes'
+    + ' and a test that constructs the opposite one.\n\n'
+    + renderLimits();
 }
 
 export function listFindings() {
@@ -75,6 +85,7 @@ export function main(argv, io = console) {
   if (opts.help) { io.log(USAGE); return 0; }
   if (opts.listChecks) { io.log(listChecks()); return 0; }
   if (opts.listFindings) { io.log(listFindings()); return 0; }
+  if (opts.limits) { io.log(listLimits()); return 0; }
 
   let result;
   try {

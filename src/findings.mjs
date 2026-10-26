@@ -1,6 +1,13 @@
 // The finding catalogue.
 //
-// Every entry states three things and the report prints all three:
+// One entry per reason, not one per check. Where a single check fires for two
+// different reasons, each reason gets its own id, because the two reasons have
+// different next actions and a reader handed the wrong one is sent to read the
+// wrong file. Where two checks would describe the same span of bytes, only the
+// reason with the larger fix is reported: see LIMIT-ONE-REASON in
+// src/limits.mjs, which states the cost of that choice.
+//
+// Every entry states both of these and the report prints both:
 //   nextAction   what a responder does with this finding
 //   doesNotProve what the finding is NOT evidence of, so nobody escalates on it alone
 //
@@ -38,6 +45,13 @@ export const CATALOGUE = {
     title: 'Root index.php does not load wp-blog-header.php',
     nextAction: 'Compare index.php with the stock file. A modified front controller is the first place an injected loader goes.',
     doesNotProve: 'It does not prove a compromise. Some subdirectory installs legitimately rewrite this file.'
+  },
+  SHAPE006: {
+    check: 'shape',
+    severity: 'critical',
+    title: 'No index.php at the web root',
+    nextAction: 'Restore index.php from the clean release that matches version.php. Without it the web server has nothing to hand a request to, so every URL fails before WordPress starts.',
+    doesNotProve: 'It does not prove the file was deleted. A subdirectory install, or a document root pointed one level too deep, looks identical from here.'
   },
   SHAPE005: {
     check: 'shape',
@@ -86,9 +100,16 @@ export const CATALOGUE = {
   CONFIG006: {
     check: 'config',
     severity: 'info',
-    title: 'File modification constants are set',
-    nextAction: 'Note the value. DISALLOW_FILE_MODS explains why plugin updates fail silently in the admin.',
+    title: 'All file modifications are disallowed',
+    nextAction: 'Note the value. DISALLOW_FILE_MODS is why plugin and core updates fail in the admin with no useful message, and why the install and update buttons are missing.',
     doesNotProve: 'It does not prove file writes are blocked. Filesystem permissions decide that, and this constant only stops WordPress from trying.'
+  },
+  CONFIG010: {
+    check: 'config',
+    severity: 'info',
+    title: 'The built in file editor is disabled',
+    nextAction: 'Note it and move on. DISALLOW_FILE_EDIT hides the theme and plugin editor screens and nothing else, so updates still work and this is not why they fail.',
+    doesNotProve: 'It does not prove the files cannot be edited. It removes two admin screens, not write access to the disk.'
   },
   CONFIG007: {
     check: 'config',
@@ -222,6 +243,13 @@ export const CATALOGUE = {
     nextAction: 'Follow the include. A one line loader that reaches elsewhere on disk is how code stays active after its directory is cleaned.',
     doesNotProve: 'It does not prove the target is hostile. Some frameworks use exactly this pattern to stage their own bootstrap.'
   },
+  DROP006: {
+    check: 'dropins',
+    severity: 'critical',
+    title: 'Must-use loader includes a file from a writable runtime directory',
+    nextAction: 'Follow the include, then work out who can write to that directory. Code loaded from uploads or a cache directory can be replaced by anything that can write a file there, so cleaning the loaded file fixes nothing.',
+    doesNotProve: 'It does not prove the target has been replaced. Some caching plugins compile real code into exactly these directories on purpose.'
+  },
   DROP005: {
     check: 'dropins',
     severity: 'high',
@@ -255,9 +283,16 @@ export const CATALOGUE = {
   HTA004: {
     check: 'htaccess',
     severity: 'high',
-    title: 'Rewrite rules that can redirect to themselves',
-    nextAction: 'Compare against the site URL in wp-config.php and the database. A loop is usually one rule forcing a host and another forcing it back.',
-    doesNotProve: 'It does not prove a loop happens. Conditions wp-triage cannot evaluate may stop it before it repeats.'
+    title: 'One rule forces https while another names an http target',
+    nextAction: 'Decide the scheme and the host in one rule, so no second rule can undo the first. This pair is what a browser reports as too many redirects.',
+    doesNotProve: 'It does not prove a loop happens. The http rule may match paths the https rule never sees, which wp-triage cannot work out from the file.'
+  },
+  HTA006: {
+    check: 'htaccess',
+    severity: 'medium',
+    title: 'Several host conditions rewrite in the same file',
+    nextAction: 'Read them in order and work out which host each one leaves the request on. Canonical host rules written at different times are the usual way a loop gets built by accident.',
+    doesNotProve: 'It does not prove the rules conflict. Several host conditions coexist happily when each one sends the request somewhere it will not be rewritten again.'
   },
   HTA005: {
     check: 'htaccess',
@@ -392,6 +427,13 @@ export const CATALOGUE = {
     title: 'Unexpected file inside wp-admin or wp-includes',
     nextAction: 'Nothing but core belongs in these directories. Replace both from the clean release rather than deleting file by file.',
     doesNotProve: 'It does not prove the file was planted. Some security plugins write their own cache files into core directories.'
+  },
+  CORE005: {
+    check: 'core',
+    severity: 'high',
+    title: 'Hidden file inside wp-admin or wp-includes',
+    nextAction: 'Read it. A leading dot keeps the file out of a plain directory listing and out of most file manager views, which is the only reason to put one here.',
+    doesNotProve: 'It does not prove it was hidden deliberately. Editors, synchronisation tools and archive extractions all leave dot files behind.'
   },
   CORE003: {
     check: 'core',
