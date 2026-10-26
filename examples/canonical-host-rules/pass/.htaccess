@@ -1,0 +1,18 @@
+# CORRECTED: one host condition and one rule. The canonical host is decided
+# in one place, so there is no second rule left to undo it.
+<IfModule mod_rewrite.c>
+RewriteEngine On
+RewriteCond %{HTTP_HOST} ^www\.example\.test$ [NC]
+RewriteRule ^(.*)$ https://example.test/$1 [R=301,L]
+</IfModule>
+
+# BEGIN WordPress
+<IfModule mod_rewrite.c>
+RewriteEngine On
+RewriteBase /
+RewriteRule ^index\.php$ - [L]
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule . /index.php [L]
+</IfModule>
+# END WordPress
