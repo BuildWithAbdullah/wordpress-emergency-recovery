@@ -1,3 +1,12 @@
 node_modules/
-*.log
 .DS_Store
+*.log
+
+# wp-triage has no dependencies, and the engine-strict job in CI runs
+# npm install, which writes one of these anyway. Ignoring it keeps the file
+# count in the README the same on CI as it is in a fresh clone.
+package-lock.json
+
+# The debug log in examples/debug-log-in-web-root is the defect that pair is
+# about, so it has to be a tracked file despite the rule above.
+!examples/**/*.log
