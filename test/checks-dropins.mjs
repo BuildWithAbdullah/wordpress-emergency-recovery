@@ -41,11 +41,22 @@ test('every must-use plugin is reported', () => {
 
 test('a must-use loader that reaches outside mu-plugins is reported', () => {
   const r = run(makeInstall({
-    'wp-content/mu-plugins/loader.php': "<?php\nrequire_once '../uploads/cache/boot.php';\n"
+    'wp-content/mu-plugins/loader.php': "<?php\nrequire_once '../../../opt/stage/boot.php';\n"
   }, 'drop-mu-loader'), only);
   const f = findingsFor(r, 'DROP004')[0];
   assert.ok(f);
   assert.equal(f.evidence.line, 2);
+});
+
+test('a must-use loader that reaches into a writable directory is the worse finding', () => {
+  const r = run(makeInstall({
+    'wp-content/mu-plugins/loader.php': "<?php\nrequire_once '../uploads/cache/boot.php';\n"
+  }, 'drop-mu-writable'), only);
+  const f = findingsFor(r, 'DROP006')[0];
+  assert.ok(f, 'a target in uploads is reported as the writable case');
+  assert.equal(f.evidence.line, 2);
+  assert.equal(f.severity, 'critical');
+  assert.ok(!ids(r).includes('DROP004'), 'and not also as leaving the directory');
 });
 
 test('a must-use plugin that includes a sibling file is not reported as reaching out', () => {
@@ -53,6 +64,7 @@ test('a must-use plugin that includes a sibling file is not reported as reaching
     'wp-content/mu-plugins/loader.php': "<?php\nrequire_once __DIR__ . '/helpers.php';\n"
   }, 'drop-mu-ok'), only);
   assert.ok(!ids(r).includes('DROP004'));
+  assert.ok(!ids(r).includes('DROP006'));
 });
 
 test('the known drop-in list holds the filenames WordPress actually loads', () => {

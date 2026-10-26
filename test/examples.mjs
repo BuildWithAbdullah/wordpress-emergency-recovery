@@ -2,12 +2,15 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
+import { CATALOGUE } from '../src/findings.mjs';
 import { examplesDir, buildInstall, run, ids, manifest } from './helpers.mjs';
 
 const { pairs } = manifest();
 
-// Walked by hand rather than with the recursive readdir option, which only
-// arrived in Node 18.17 and this suite runs on Node 18.
+const set = (list) => [...new Set(list)].sort();
+
+// Walked by hand rather than with the recursive readdir option, because the
+// recursive form returns directories as well and this wants a file count.
 function countFiles(dir) {
   let n = 0;
   for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
@@ -35,25 +38,34 @@ test('every pair has a fail side and a pass side with at least one file', () => 
   }
 });
 
-for (const p of pairs) {
-  test(`${p.name}: the failing install reports ${p.expect.fail.join(', ')}`, () => {
-    const dir = buildInstall(path.join(examplesDir, p.name, 'fail'), p.name + '-fail');
-    const found = ids(run(dir));
-    for (const id of p.expect.fail) {
-      assert.ok(found.includes(id), `expected ${id} in the failing install, got ${[...new Set(found)].join(', ')}`);
+test('every id either side of a pair is in the catalogue', () => {
+  for (const p of pairs) {
+    for (const id of [...p.expect.fail, ...p.expect.residual]) {
+      assert.ok(CATALOGUE[id], `${p.name} names ${id}, which is not in the catalogue`);
     }
+  }
+});
+
+// Set equality, not inclusion. A pair that trips a finding it does not
+// declare is as wrong as one that misses a finding it does, because the
+// undeclared one is the half nobody reviewed.
+for (const p of pairs) {
+  test(`${p.name}: the failing install reports exactly ${p.expect.fail.join(', ')}`, () => {
+    const dir = buildInstall(path.join(examplesDir, p.name, 'fail'), p.name + '-fail');
+    assert.deepEqual(set(ids(run(dir))), set(p.expect.fail));
   });
 
-  test(`${p.name}: the corrected install does not report ${p.expect.fail.join(', ')}`, () => {
+  // The residual set: what the repair layer cannot clear, asserted in both
+  // directions. Everything the failing side reported is gone unless it is in
+  // the residual set, and everything in the residual set is still there.
+  test(`${p.name}: the corrected install reports exactly ${p.expect.residual.join(', ')}`, () => {
     const dir = buildInstall(path.join(examplesDir, p.name, 'pass'), p.name + '-pass');
-    const found = ids(run(dir));
-    const cleared = p.expect.fail.filter((id) => !p.expect.pass.includes(id));
-    for (const id of cleared) {
-      assert.ok(!found.includes(id), `${id} is still reported on the corrected side`);
-    }
-    for (const id of p.expect.pass) {
-      assert.ok(found.includes(id), `expected ${id} to remain on the corrected side`);
-    }
+    const found = set(ids(run(dir)));
+    assert.deepEqual(found, set(p.expect.residual));
+    const cleared = p.expect.fail.filter((id) => !p.expect.residual.includes(id));
+    assert.ok(cleared.length > 0, `${p.name} corrects nothing`);
+    for (const id of cleared) assert.ok(!found.includes(id), `${id} survived the correction`);
+    for (const id of p.expect.residual) assert.ok(found.includes(id), `${id} is declared residual but is absent`);
   });
 }
 
@@ -65,11 +77,12 @@ test('the baseline install on its own reports nothing above medium', () => {
 });
 
 // The cross-check. A corrected example that happens to carry a different
-// defect is worse than no example at all, because it teaches the wrong thing.
-test('no corrected install trips any other pair failing finding', () => {
+// pair's defect is worse than no example at all, because it teaches the
+// wrong thing.
+test('no corrected install trips another pair failing finding', () => {
   const every = new Set(pairs.flatMap((p) => p.expect.fail));
   for (const p of pairs) {
-    const allowed = new Set(p.expect.pass);
+    const allowed = new Set(p.expect.residual);
     const dir = buildInstall(path.join(examplesDir, p.name, 'pass'), p.name + '-cross');
     const found = new Set(ids(run(dir)));
     for (const id of every) {
@@ -84,4 +97,18 @@ test('every pair is listed in the examples README', () => {
   for (const p of pairs) {
     assert.ok(readme.includes(`\`${p.name}\``), `${p.name} is not in examples/README.md`);
   }
+});
+
+// The honest number. The pairs are the readable half of the evidence and
+// they reach a minority of the catalogue, which is the reason the fixture
+// corpus exists. Asserted so the claim in the README cannot drift.
+test('the pairs reach a minority of the catalogue, and the README says which', () => {
+  const reached = new Set(pairs.flatMap((p) => [...p.expect.fail, ...p.expect.residual]));
+  const total = Object.keys(CATALOGUE).length;
+  assert.ok(reached.size < total, 'the pairs are not supposed to reach everything');
+  const readme = fs.readFileSync(path.join(examplesDir, '..', 'README.md'), 'utf8');
+  assert.ok(
+    readme.includes(`${reached.size} of the ${total}`),
+    `README should say the pairs reach ${reached.size} of the ${total} catalogued findings`
+  );
 });
