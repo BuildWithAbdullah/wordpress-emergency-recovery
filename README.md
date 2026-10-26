@@ -200,7 +200,7 @@ responder opening `.htaccess` at the reported line found a comment.
 
 ```bash
 npm test        # 264 tests
-npm run verify  # 966 repository assertions
+npm run verify  # 861 repository assertions
 npm run exits   # the real binary over every example, both sides
 npm run check   # all three
 ```
