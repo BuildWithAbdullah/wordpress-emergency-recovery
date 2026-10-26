@@ -21,6 +21,10 @@ export const KNOWN_DROPINS = new Set([
   'blog-suspended.php'
 ]);
 
+// Where an include points, which decides which finding it is.
+const WRITABLE = /(^|\/)(uploads|cache|tmp|temp)(\/|$)/i;
+const ESCAPES = /\.\.\//;
+
 // Names that look like a drop-in but are loaded by nothing.
 const SUSPICIOUS_SHAPE = /^(wp-|_|\.)|cache|config|class|core|init|load|index2|admin/i;
 
@@ -52,9 +56,19 @@ export function run(ctx) {
     const includes = matches(text, /(?:require|include)(?:_once)?\s*\(?\s*['"]([^'"]+)['"]/g, 8);
     for (const inc of includes) {
       const target = inc.groups[0] || '';
-      if (/\.\.\//.test(target) || /^\/|^[A-Za-z]:/.test(target) || /tmp|uploads|cache/i.test(target)) {
+      // Two reasons, and the second is worse. A path that leaves the
+      // directory means the code stays active after mu-plugins is cleaned.
+      // A path into a directory the web server can write means the code can
+      // be replaced at will, so cleaning the target fixes nothing either.
+      // Reported separately because the second one is not finished until the
+      // write access is closed too.
+      if (WRITABLE.test(target)) {
+        out.push(make('DROP006', { file: f.rel, line: inc.line, excerpt: inc.excerpt }, {
+          detail: `Includes ${target}, which is a directory the site writes to.`
+        }));
+      } else if (ESCAPES.test(target)) {
         out.push(make('DROP004', { file: f.rel, line: inc.line, excerpt: inc.excerpt }, {
-          detail: `Includes ${target}.`
+          detail: `Includes ${target}, which resolves outside mu-plugins.`
         }));
       }
     }

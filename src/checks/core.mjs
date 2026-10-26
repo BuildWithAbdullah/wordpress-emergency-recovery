@@ -37,13 +37,19 @@ export function run(ctx) {
     out.push(make('CORE001', { file: f.rel }, { detail: `${f.size} bytes at the web root.` }));
   }
 
-  // Files in core directories that carry an extension core never ships.
+  // Files in core directories that core never ships, under two findings
+  // rather than one. An extension core does not use is usually a backup or a
+  // cache file somebody left behind. A leading dot is a different thing: it
+  // keeps the file out of a directory listing, and that is the only reason to
+  // choose the name. They were one finding whose next action fitted the first.
   for (const dir of CORE_DIRS) {
     if (!ctx.isDir(dir)) continue;
     for (const f of ctx.under(dir)) {
       if (f.dir) continue;
       const base = f.rel.split('/').pop();
-      if (!CORE_DIR_EXT.test(base) || /^\./.test(base)) {
+      if (/^\./.test(base)) {
+        out.push(make('CORE005', { file: f.rel }, { detail: `${f.size} bytes, hidden by its name.` }));
+      } else if (!CORE_DIR_EXT.test(base)) {
         out.push(make('CORE002', { file: f.rel }, { detail: `${f.size} bytes inside a core directory.` }));
       }
     }

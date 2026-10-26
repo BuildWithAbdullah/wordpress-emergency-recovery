@@ -48,14 +48,17 @@ export function run(ctx) {
       }
     }
 
-    // Only files that are one uninterrupted PHP block. A template that
-    // deliberately drops in and out of PHP ends with a closing tag by design,
-    // and its trailing newline is markup, not a mistake.
+    // Only files that are one uninterrupted PHP block, and only when what
+    // follows the closing tag is whitespace. A template that deliberately
+    // drops out of PHP also has one opening tag and a closing tag, and its
+    // trailing markup is the page, not a mistake: the next action here is to
+    // delete the tag and everything after it, which on such a file deletes
+    // the output.
     const openTags = (text.match(/<\?(php|=)/g) || []).length;
     const close = text.lastIndexOf('?>');
     if (openTags === 1 && close !== -1) {
       const after = text.slice(close + 2);
-      if (after.length > 0) {
+      if (after.length > 0 && after.trim() === '') {
         out.push(make('OUT002', { file: f.rel, line: text.slice(0, close).split('\n').length, excerpt: JSON.stringify(after.slice(0, 40)) }, {
           detail: `${after.length} byte(s) after the final closing tag.`
         }));

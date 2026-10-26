@@ -32,8 +32,16 @@ export function run(ctx) {
     out.push(make('SHAPE003', { file: 'wp-content' }));
   }
 
+  // A root with no index.php reported nothing at all, because the only check
+  // on the front controller read its contents and a missing file reads as
+  // null. The web server has nothing to hand a request to, so this is the
+  // loudest thing on the install and it was silent.
   const index = ctx.readText('index.php');
-  if (index !== null && !/wp-blog-header\.php/.test(index)) {
+  if (!ctx.has('index.php')) {
+    out.push(make('SHAPE006', { file: 'index.php' }, {
+      detail: 'Nothing at the web root answers a request for the home page.'
+    }));
+  } else if (index !== null && !/wp-blog-header\.php/.test(index)) {
     const hit = matches(index, /require|include/i, 1)[0];
     out.push(make('SHAPE004', {
       file: 'index.php',

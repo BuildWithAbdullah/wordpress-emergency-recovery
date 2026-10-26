@@ -12,30 +12,85 @@ const PLACEHOLDERS = [
   'localhost_here'
 ];
 
+const BOM = '﻿';
+
+// Reads the value of a define by walking the parentheses rather than by
+// matching up to the first closing one. The common real form of
+// WP_DEBUG_LOG puts a function call in the value, and a regular expression
+// that stops at the first `)` captures half of it and then judges the half.
+export function readConstant(text, name) {
+  const opener = new RegExp(`define\\s*\\(\\s*(['"])${name}\\1\\s*,`, 'i');
+  const m = text.match(opener);
+  if (!m) return null;
+  let i = m.index + m[0].length;
+  let depth = 1;
+  let quote = null;
+  while (i < text.length && depth > 0) {
+    const ch = text[i];
+    if (quote) {
+      if (ch === '\\') i += 1;
+      else if (ch === quote) quote = null;
+    } else if (ch === "'" || ch === '"') {
+      quote = ch;
+    } else if (ch === '(') {
+      depth += 1;
+    } else if (ch === ')') {
+      depth -= 1;
+      if (depth === 0) break;
+    }
+    i += 1;
+  }
+  // An unbalanced statement is reported as absent rather than guessed at.
+  if (depth !== 0) return null;
+  return {
+    raw: text.slice(m.index + m[0].length, i).trim(),
+    line: lineOf(text, m.index),
+    excerpt: excerpt(text, m.index)
+  };
+}
+
+const LITERAL_TRUE = /^(true|1|'1'|"1")$/i;
+const LITERAL_FALSE = /^(false|0|'0'|"0"|null)$/i;
+
+export function truthy(v) {
+  return v !== null && LITERAL_TRUE.test(v.raw);
+}
+
+export function falsy(v) {
+  return v !== null && LITERAL_FALSE.test(v.raw);
+}
+
+// A value that is neither literal is something only PHP can work out. The
+// tool says so rather than treating it as off, which is what a half parsed
+// value used to amount to.
+export function literal(v) {
+  return v !== null && (LITERAL_TRUE.test(v.raw) || LITERAL_FALSE.test(v.raw));
+}
+
 export function run(ctx) {
   const rel = 'wp-config.php';
   const text = ctx.readText(rel);
   if (text === null) return [];
   const out = [];
 
-  const constant = (name) => {
-    const re = new RegExp(`define\\s*\\(\\s*['"]${name}['"]\\s*,\\s*([^)]*)\\)`, 'i');
-    const m = text.match(re);
-    if (!m) return null;
-    return { raw: m[1].trim(), line: lineOf(text, m.index), excerpt: excerpt(text, m.index) };
-  };
-  const truthy = (v) => v !== null && /^(true|1|'1')$/i.test(v.raw);
-  const falsy = (v) => v !== null && /^(false|0|'0')$/i.test(v.raw);
+  const constant = (name) => readConstant(text, name);
 
   // Bytes before the opening tag. Checked first, because when this is wrong
-  // nothing else about the file matters.
+  // nothing else about the file matters. A byte order mark on its own is left
+  // to the output check, which names it exactly: reporting the same three
+  // bytes here as well puts one span of a file in the queue twice under two
+  // ids. The count is in bytes, because the mark is three of them and reading
+  // the file as text turns it into one character.
   const openIdx = text.indexOf('<?php');
   if (openIdx > 0) {
-    out.push(make('CONFIG007', {
-      file: rel,
-      line: 1,
-      excerpt: JSON.stringify(text.slice(0, Math.min(openIdx, 40)))
-    }, { detail: `${openIdx} byte(s) precede the opening tag.` }));
+    const before = text.slice(0, openIdx);
+    if (before !== BOM) {
+      out.push(make('CONFIG007', {
+        file: rel,
+        line: 1,
+        excerpt: JSON.stringify(before.slice(0, 40))
+      }, { detail: `${Buffer.byteLength(before, 'utf8')} byte(s) precede the opening tag.` }));
+    }
   }
 
   const debug = constant('WP_DEBUG');
@@ -49,8 +104,10 @@ export function run(ctx) {
   }
 
   const log = constant('WP_DEBUG_LOG');
-  if (log && /wp-content|^'?\.\//.test(log.raw)) {
-    out.push(make('CONFIG002', { file: rel, line: log.line, excerpt: log.excerpt }));
+  if (log && /wp-content|ABSPATH|__DIR__|__FILE__|^'?\.\//.test(log.raw)) {
+    out.push(make('CONFIG002', { file: rel, line: log.line, excerpt: log.excerpt }, {
+      detail: `WP_DEBUG_LOG is ${log.raw}, which resolves inside the install.`
+    }));
   } else if (truthy(log)) {
     out.push(make('CONFIG002', { file: rel, line: log.line, excerpt: log.excerpt }, {
       detail: 'WP_DEBUG_LOG is true, which writes to wp-content/debug.log by default.'
@@ -80,9 +137,21 @@ export function run(ctx) {
     if (c) out.push(make('CONFIG005', { file: rel, line: c.line, excerpt: c.excerpt }, { detail: `${name} is ${c.raw}.` }));
   }
 
-  for (const name of ['DISALLOW_FILE_MODS', 'DISALLOW_FILE_EDIT']) {
-    const c = constant(name);
-    if (truthy(c)) out.push(make('CONFIG006', { file: rel, line: c.line, excerpt: c.excerpt }, { detail: `${name} is true.` }));
+  // Two constants that are routinely confused for each other. MODS stops
+  // every update and install; EDIT only hides two admin screens. A responder
+  // chasing an update that will not run needs to know which one is set, so
+  // they are separate findings rather than one with a different detail line.
+  const mods = constant('DISALLOW_FILE_MODS');
+  if (truthy(mods)) {
+    out.push(make('CONFIG006', { file: rel, line: mods.line, excerpt: mods.excerpt }, {
+      detail: 'DISALLOW_FILE_MODS is true, so plugin, theme and core updates are all blocked.'
+    }));
+  }
+  const fileEdit = constant('DISALLOW_FILE_EDIT');
+  if (truthy(fileEdit)) {
+    out.push(make('CONFIG010', { file: rel, line: fileEdit.line, excerpt: fileEdit.excerpt }, {
+      detail: 'DISALLOW_FILE_EDIT is true, which removes the theme and plugin editor screens only.'
+    }));
   }
 
   if (!constant('WP_MEMORY_LIMIT')) {
