@@ -1,0 +1,2 @@
+[26-Oct-2026 09:14:02 UTC] PHP Notice:  Undefined index: layout in /var/www/html/wp-content/themes/sample-theme/functions.php on line 18
+[26-Oct-2026 09:15:40 UTC] PHP Fatal error:  Allowed memory size of 268435456 bytes exhausted (tried to allocate 20480 bytes) in /var/www/html/wp-includes/functions.php on line 900
