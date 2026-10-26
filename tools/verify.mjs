@@ -212,9 +212,14 @@ if (floor) {
 // npm writes a banner to stdout, so a step that redirects `npm run` into a
 // file captures the banner along with the output and a generated file check
 // then compares the wrong bytes.
-for (const line of ci.split('\n')) {
-  check(!/npm run [\w:-]+\s*>/.test(line), `a CI step redirects an npm run: ${line.trim()}`);
-}
+//
+// One assertion over the whole file rather than one per line, deliberately.
+// Per line, the assertion total moved every time the workflow was edited,
+// which made the self referential count in the README a count of how long
+// the CI file is. Found by running the published clone's own verifier against
+// a README written from the working copy.
+const redirected = ci.split('\n').filter((line) => /npm run [\w:-]+\s*>/.test(line));
+check(redirected.length === 0, `CI steps that redirect an npm run: ${redirected.map((l) => l.trim()).join(' | ')}`);
 
 // ---- the counts the README prints ---------------------------------------
 const { pass, fail } = await countTests(repoRoot);
