@@ -13,7 +13,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        node: ['18', '20', '22']
+        # 20.0.0 exactly, because that is the engines floor and a job named
+        # '20' would resolve to the newest release of the line instead. The
+        # other two are deliberately the newest of their lines.
+        node: ['20.0.0', '22', '24']
     steps:
       - uses: actions/checkout@v4
 
@@ -27,23 +30,30 @@ jobs:
       - name: Verify the repository
         run: npm run verify
 
-      - name: Run wp-triage over a failing example and expect exit 1
+      - name: Count the tests from the runner event stream
+        run: npm run count
+
+  cli:
+    name: Run the tool, not only its tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: A clean baseline exits 0
         run: |
           set +e
           node bin/wp-triage.mjs examples/_baseline --format text
-          base=$?
+          code=$?
           set -e
-          test "$base" -eq 0 || { echo "the clean baseline should exit 0, got $base"; exit 1; }
+          test "$code" -eq 0 || { echo "the clean baseline should exit 0, got $code"; exit 1; }
 
-          rm -rf /tmp/case && cp -r examples/_baseline /tmp/case
-          cp -r examples/uploads-php-shell/fail/. /tmp/case/
-          set +e
-          node bin/wp-triage.mjs /tmp/case --format markdown
-          bad=$?
-          set -e
-          test "$bad" -eq 1 || { echo "a failing install should exit 1, got $bad"; exit 1; }
+      - name: Every pair exits the code the manifest implies, both sides
+        run: npm run exits
 
-      - name: Reject an unreadable path with exit 2
+      - name: An unreadable path is refused with exit 2
         run: |
           set +e
           node bin/wp-triage.mjs /no/such/path
@@ -51,7 +61,45 @@ jobs:
           set -e
           test "$code" -eq 2 || { echo "expected exit 2, got $code"; exit 1; }
 
-      - name: Confirm the tool has no dependencies to install
+      - name: The declared limits print
         run: |
-          test ! -f package-lock.json || { echo "a lock file means a dependency crept in"; exit 1; }
+          set -e
+          node bin/wp-triage.mjs --limits | grep -q 'LIMIT-TIMESTAMPS'
+          node bin/wp-triage.mjs --list-findings | wc -l
+          node bin/wp-triage.mjs --list-checks | wc -l
+
+  engines:
+    name: The engines floor is a real floor
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20.0.0'
+
+      - name: Install with the engine constraint enforced
+        run: npm install --engine-strict
+
+      - name: Confirm no dependency crept in
+        run: |
           node -e "const p=require('./package.json');if(Object.keys(p.dependencies||{}).length){console.error('dependencies found');process.exit(1)}"
+
+      - name: The file count is unchanged by an install
+        run: npm run verify
+
+  tracked:
+    name: The gitignore matcher agrees with git
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Compare the tool against git ls-files
+        run: |
+          set -e
+          git ls-files --cached --others --exclude-standard | sort > /tmp/from-git.txt
+          node tools/tracked.mjs 2>/dev/null | sort > /tmp/from-tool.txt
+          diff /tmp/from-git.txt /tmp/from-tool.txt
+          echo "$(wc -l < /tmp/from-git.txt) files, identical both ways"
