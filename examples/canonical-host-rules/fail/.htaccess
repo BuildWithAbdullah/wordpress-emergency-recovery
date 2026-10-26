@@ -1,0 +1,26 @@
+# FAILING: two canonical host rules, written months apart, that each send the
+# request to the host the other one rewrites away from. A browser follows both
+# until it gives up. wp-triage reports the pair and says plainly that it
+# cannot prove they conflict, because whether they do depends on the order
+# Apache evaluates them in and on conditions that are not in this file.
+<IfModule mod_rewrite.c>
+RewriteEngine On
+RewriteCond %{HTTP_HOST} ^example\.test$ [NC]
+RewriteRule ^(.*)$ https://www.example.test/$1 [R=301,L]
+</IfModule>
+
+<IfModule mod_rewrite.c>
+RewriteCond %{HTTP_HOST} ^www\.example\.test$ [NC]
+RewriteRule ^(.*)$ https://example.test/$1 [R=301,L]
+</IfModule>
+
+# BEGIN WordPress
+<IfModule mod_rewrite.c>
+RewriteEngine On
+RewriteBase /
+RewriteRule ^index\.php$ - [L]
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule . /index.php [L]
+</IfModule>
+# END WordPress
